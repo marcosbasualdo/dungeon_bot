@@ -340,9 +340,9 @@ class DungeonBot(object):
 
 	def join_lobby(self, user, lobby_uid=None):
 		if not lobby_uid:
-			if len(list(DungeonBot.lobbies.keys())) > 0:
-				lobby_uid = random.choice([lobby for lobby in list(DungeonBot.lobbies.keys()) if not DungeonBot.lobbies[lobby].is_enough_players() and not DungeonBot.lobbies[lobby].crawl])#select random lobby
-			else:
+			#if len(list(DungeonBot.lobbies.keys())) > 0:
+			#	lobby_uid = random.choice([lobby for lobby in list(DungeonBot.lobbies.keys()) if not DungeonBot.lobbies[lobby].is_enough_players() and not DungeonBot.lobbies[lobby].crawl])#select random lobby
+			#else:
 				lobby_uid = self.new_crawl_lobby(1) 
 		if not lobby_uid in list(DungeonBot.lobbies.keys()):
 			return "No such lobby!"
