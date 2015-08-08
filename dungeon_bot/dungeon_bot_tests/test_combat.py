@@ -130,5 +130,5 @@ def run_tests():
 	# ply.inventory.append(item)
 	# ply.equip(item)
 
-	enemies = [dummy,Rat(100),Rat(1),Rat(1),Rat(1)]
+	enemies = [dummy,FranaPuto(100),FranaPuto(1),FranaPuto(1),FranaPuto(1)]
 	controlled_combat_event([ply], enemies)

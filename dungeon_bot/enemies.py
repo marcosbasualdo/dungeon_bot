@@ -62,14 +62,14 @@ class Dummy(Enemy):
 
 
 
-rat_characteristics = {
+franaputo_characteristics = {
 		"strength": 2, #how hard you hit
 		"vitality": 2, #how much hp you have
 		"dexterity": 5, #how fast you act, your position in turn qeue
 		"intelligence": 3, #how likely you are to strike a critical
 	}
 
-class Rat(Enemy):
+class FranaPuto(Enemy):
 	drop_table = {
 		"club" : 5,
 		"dagger" : 5,
@@ -79,7 +79,7 @@ class Rat(Enemy):
 	}
 	loot_coolity = 0.5
 
-	def __init__(self, level=1, name="rat",  characteristics = rat_characteristics, stats=None, description="An angry grey rat.", inventory=[], equipment=default_equipment, tags=["animate", "living","rodent", "animal", "small"],abilities=[],modifiers=[], exp_value=50):
+	def __init__(self, level=1, name="Frana puto",  characteristics = franaputo_characteristics, stats=None, description="An angry frana puto.", inventory=[], equipment=default_equipment, tags=["animate", "living","rodent", "animal", "small", "puto"],abilities=[],modifiers=[], exp_value=50):
 		Enemy.__init__(self, name, level, characteristics, stats, description, inventory, equipment, tags, abilities, modifiers, exp_value)
 		teeth = get_item_by_name("rodent_teeth", 0)
 		if self.add_to_inventory(teeth):
@@ -98,14 +98,14 @@ class Rat(Enemy):
 		return attack_infos
 
 
-big_rat_characteristics = {
+franareputo_characteristics = {
 	"strength": 3, #how hard you hit
 	"vitality": 2, #how much hp you have
 	"dexterity": 5, #how fast you act, your position in turn qeue
 	"intelligence": 5, #how likely you are to strike a critical
 }
 
-class BigRat(Enemy):
+class FranaRePuto(Enemy):
 	drop_table = {
 		"club" : 5,
 		"dagger" : 5,
@@ -117,7 +117,7 @@ class BigRat(Enemy):
 	
 	loot_coolity = 0.5
 
-	def __init__(self, level=1, name="big rat", characteristics = big_rat_characteristics, stats=None, description="A big angry grey rat.", inventory=[], equipment=default_equipment, tags=["living", "animate", "rodent", "animal", "small"],abilities=[],modifiers=[], exp_value=80):
+	def __init__(self, level=1, name="Frana re puto", characteristics = franareputo_characteristics, stats=None, description="An angry Frana re puto.", inventory=[], equipment=default_equipment, tags=["living", "animate", "rodent", "animal", "big", "reputo"],abilities=[],modifiers=[], exp_value=80):
 		Enemy.__init__(self, name, level, characteristics, stats, description, inventory, equipment, tags, abilities, modifiers, exp_value)
 		teeth = get_item_by_name("rodent_teeth", 0)
 		if self.add_to_inventory(teeth):
@@ -620,8 +620,8 @@ class Thief(Enemy):
 
 """ enemy group functions below """
 enemy_list = { #name to enemy
-	"rat": Rat,
-	"big rat": BigRat,
+	"Frana puto": FranaPuto,
+	"Frana re puto": FranaRePuto,
 	"wolf": Wolf,
 	"wolf pack leader": WolfLeader,
 	"bear": Bear,
@@ -633,25 +633,25 @@ enemy_list = { #name to enemy
 	"thief": Thief,
 }
 
-def rat_pack(size):
-	description = "A rat.\n"
-	rat_levels = list(range(1, 3))
+def frana_pack(size):
+	description = "A frana puto.\n"
+	frana_levels = list(range(1, 3))
 	amount = 1
 	if size == "small":
 		amount = random.randint(1, 3)
 		if amount > 1:
-			description = "A small pack of rats.\n"
+			description = "A small pack of franas putos.\n"
 	elif size == "medium":
-		description = "A pack of rats.\n"
+		description = "A pack of franas putos.\n"
 		amount = random.randint(3, 6)
 	elif size == "big":
-		description = "A hoard of rats.\n"
+		description = "A hoard of franas putos.\n"
 		amount = random.randint(6, 10)
 	elif size == "huge":
-		description = "RATS ARE EVERYWHERE.\n"
+		description = "FRANAS PUTOS ARE EVERYWHERE.\n"
 		amount = random.randint(10, 20)
-	rats = [ Rat(random.choice(rat_levels)) if random.randint(0, 10) < 7 else BigRat(random.choice(rat_levels)) for x in range(amount+1)]
-	return rats, description
+	franas = [ FranaPuto(random.choice(frana_levels)) if random.randint(0, 10) < 7 else FranaRePuto(random.choice(frana_levels)) for x in range(amount+1)]
+	return franas, description
 
 def wolf_pack(size):
 	wolf_leader = None
@@ -809,11 +809,11 @@ def thugs(size):
 
 enemy_tables = { # difficulty rating: (function to get enemy or enemy group, params)
 	"common": { 
-		"1": (rat_pack, [] ),
-		"1": (rat_pack,["small"] ),
-		"5": (rat_pack, ["medium"] ),
-		"10": (rat_pack, ["big"] ),
-		"30": (rat_pack, ["huge"] )
+		"1": (frana_pack, [] ),
+		"1": (frana_pack,["small"] ),
+		"5": (frana_pack, ["medium"] ),
+		"10": (frana_pack, ["big"] ),
+		"30": (frana_pack, ["huge"] )
 	},
 	"animal": { 
 		"1": (wolf_pack,[] ),
