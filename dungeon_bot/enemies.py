@@ -795,7 +795,7 @@ enemy_list = { #name to enemy
 def frana_pack(size):
 	description = "A frana puto.\n"
 	frana_levels = list(range(1, 5))
-""" Common enemy spawn functions """
+	""" Common enemy spawn functions """
 	amount = 1
 	if size == "small":
 		rat_levels = list(range(1, 10))
