@@ -16,6 +16,8 @@ Tags:
 	quick - Harder to hit and dodge
 	slow - Easier to hit and dodge
 	physical ressitant - Resistant to physical damage
+	fire resistant - self explanatory
+	electricity resistant - self explanatory
 	magic ressitant - Resistant to magic damage
 
 	undead - Undead creatures
@@ -43,7 +45,7 @@ class AbilityUseInfo(object):
 			self.description += self.inhibitor.on_energy_lost(use_info["energy_change"])
 
 		if self.ability_type == "aoe_attack":
-			self = self.inhibitor.on_attack(self)
+			#self = self.inhibitor.on_attack(self)
 			#print(self.targets)
 			for i in range(len(self.targets)):
 				target = self.targets[i]
@@ -59,7 +61,7 @@ class AbilityUseInfo(object):
 		if self.ability_type == "attack":
 			self = self.inhibitor.on_attack(self)
 			self = self.target.on_attacked(self)
-			if random.randint(0, 100) > use_info["hit_chance"]:
+			if random.randint(1, 100) > use_info["hit_chance"]:
 				self.description += self.prototype_class.get_miss_description(self) 
 				self = self.inhibitor.on_miss(self)
 			else:
@@ -70,13 +72,13 @@ class AbilityUseInfo(object):
 				self = self.target.on_got_hit(self)
 
 				for modifier in self.prototype_class.get_modifiers_applied(self):
-						use_info["modifiers_applied"].append(modifier)
+					use_info["modifiers_applied"].append(modifier)
 
 		if self.ability_type == "buff":
 			self = self.inhibitor.on_buff(self)
 			self = self.inhibitor.on_buffed(self)
 
-		if "did_kill" in use_info.keys() and not use_info["did_kill"]:
+		if "modifiers_applied" in self.use_info.keys():
 			for modifier in use_info["modifiers_applied"]:
 				self.description += modifier.apply() 
 
@@ -101,7 +103,7 @@ class AbilityUseInfo(object):
 			target = target + "(%s)"%(self.target.uid)
 
 		msg_lines = []
-		msg_lines.append("Inhibitor %s uses %s(%s) of item %s on target %s."%(inhibitor, self.ability_type, self.prototype_class, self.use_info["item_used"].name, target))
+		msg_lines.append("Inhibitor %s uses %s(%s) of item %s on target %s."%(inhibitor, self.ability_type, self.prototype_class, self.use_info["item_used"].name if self.use_info["item_used"] else str(None), target))
 		msg_lines.append("Energy change: %d"%(self.use_info["energy_change"]))
 		if self.ability_type == "aoe_attack":
 			msg = "AOE attack %s by %s."%(self.prototype_class.name, self.inhibitor.name)
@@ -144,9 +146,9 @@ class AoeAttackInfo(AbilityUseInfo):
 		for i in range(max_targets):
 			cr = None
 			if hasattr(inhibitor, "exp_value"):
-				cr = random.choice([ c for c in combat_event.turn_qeue if not c.dead and not hasattr(c, "exp_value")])
+				cr = random.choice([ c for c in combat_event.turn_queue if not c.dead and not hasattr(c, "exp_value")])
 			else:
-				cr = random.choice([ c for c in combat_event.turn_qeue if not c.dead and hasattr(c, "exp_value")])
+				cr = random.choice([ c for c in combat_event.turn_queue if not c.dead and hasattr(c, "exp_value")])
 
 			if cr and not cr in self.targets:
 				self.targets.append( cr )
@@ -192,12 +194,12 @@ class Ability(object):
 			use_info.use_info["hit_chances"] = [ clamp( use_info.prototype_class.get_chance_to_hit(use_info.inhibitor, use_info.targets[x], use_info.use_info["item_used"]), 5, int(95/(x+1))) for x in range(len(use_info.targets)) ]
 
 			for x in range(len(use_info.targets)):
-				use_info.use_info["damage_multipliers"].append(clamp(random.uniform(0.5, 1.1), 0.5, 1.1))
+				use_info.use_info["damage_multipliers"].append(clamp(1 - 0.25*(x), 0.25, 1))
 
 		elif use_info.ability_type == "attack":
 			use_info.use_info["hit_chance"] = clamp( use_info.prototype_class.get_chance_to_hit(use_info.inhibitor, use_info.target, use_info.use_info["item_used"]), 5, 95)
 
-		#	if random.randint(0, 100) > use_info.use_info["hit_chance"]:
+		#	if random.randint(1, 100) > use_info.use_info["hit_chance"]:
 				#use_info.description += use_info.prototype_class.get_miss_description(use_info) 
 			#else:
 			#	use_info.use_info["did_hit"] = True
@@ -226,11 +228,11 @@ class Ability(object):
 
 	@staticmethod
 	def get_miss_description(attack_info):
-		return "%s uses %s on %s with the %s, but misses.\n"%(attack_info.inhibitor.name.capitalize(),attack_info.prototype_class.__name__, attack_info.target.short_desc.capitalize(), attack_info.use_info['item_used'].name)
+		return "%s uses %s on %s with the %s, but misses.\n"%(attack_info.inhibitor.short_desc.capitalize(),attack_info.prototype_class.__name__, attack_info.target.short_desc.capitalize(), attack_info.use_info['item_used'].name)
 
 	@staticmethod
 	def get_hit_description(attack_info):
-		return "%s uses %s on %s with the %s for %d damage.\n"%(attack_info.inhibitor.name.capitalize(),attack_info.prototype_class.__name__, attack_info.target.short_desc.capitalize(), attack_info.use_info['item_used'].name, attack_info.use_info["damage_dealt"] )
+		return "%s uses %s on %s with the %s for %d damage.\n"%(attack_info.inhibitor.short_desc.capitalize(),attack_info.prototype_class.__name__, attack_info.target.short_desc.capitalize(), attack_info.use_info['item_used'].name, attack_info.use_info["damage_dealt"] )
 
 
 
@@ -239,7 +241,7 @@ class Smash(Ability):
 	"""
 	chance to hit = accuracy * dexterity - target_evasion - is_small * target_evasion * 2 - is_quick * target_evasion * 2 + is_big * target_evasion * 2 + is_slow * target_evasion * 2
 
-	dmg = weapon_dmg * strength - defence - is_armored * defence * 2 - is_heavy_armored * defence * 3
+	dmg = weapon_dmg * strength - is_armored * defense * 2 - is_heavy_armored * defense * 3
 
 	avg chance to hit = 45
 
@@ -252,6 +254,7 @@ class Smash(Ability):
 	description = "Smash your weapon and hope you hit something!"
 	energy_required = 2
 	requirements = None
+	requires_target = "enemy"
 
 	@staticmethod
 	def can_use(user, target=None):
@@ -266,11 +269,11 @@ class Smash(Ability):
 
 	@staticmethod
 	def get_miss_description(attack_info):
-		return "%s swings %s at %s but misses.\n"%(attack_info.inhibitor.name.capitalize(), attack_info.use_info['item_used'].name, attack_info.target.name)
+		return "%s swings %s at %s but misses.\n"%(attack_info.inhibitor.short_desc.capitalize(), attack_info.use_info['item_used'].name, attack_info.target.short_desc)
 
 	@staticmethod
 	def get_hit_description(attack_info):
-		return "%s swings %s and deals %d damage to %s.\n"%(attack_info.inhibitor.name.capitalize(), attack_info.use_info['item_used'].name, attack_info.use_info["damage_dealt"], attack_info.target.short_desc.capitalize())
+		return "%s swings %s and deals %d damage to %s.\n"%(attack_info.inhibitor.short_desc.capitalize(), attack_info.use_info['item_used'].name, attack_info.use_info["damage_dealt"], attack_info.target.short_desc.capitalize())
 
 	@staticmethod
 	def get_knockdown_chance(use_info):		
@@ -279,7 +282,7 @@ class Smash(Ability):
 
 	@staticmethod
 	def get_modifiers_applied(use_info):
-		if random.randint(0, 100) < Smash.get_knockdown_chance(use_info):
+		if random.randint(1, 100) <= Smash.get_knockdown_chance(use_info):
 			modifier = get_modifier_by_name("knockdown", use_info.inhibitor, use_info.target)
 			return [modifier]
 		return []
@@ -289,11 +292,10 @@ class Smash(Ability):
 
 		weapon_dmg = diceroll(weapon.stats["damage"])
 		strength = user.characteristics["strength"]
-		defence = target.defence
+		defense = target.defense
 		is_armored = int("armor" in target.tags) * 0.2
 		is_heavy_armored = int("heavy armor" in target.tags) * 0.4
-
-		dmg = clamp( weapon_dmg * strength - defence , user.characteristics["strength"]/2, 99999999 )
+		dmg = clamp( weapon_dmg * strength , user.characteristics["strength"]/2, 99999999 )
 		return dmg
 
 	@staticmethod
@@ -327,7 +329,7 @@ class Stab(Ability):
 
 	chance to hit = accuracy * dexterity - target_evasion - is_small * target_evasion * 2 - is_quick * target_evasion * 2 + is_big * target_evasion * 2 + is_slow * target_evasion * 2
 
-	dmg = weapon_dmg * strength + not_armored * 0.3 *(weapon_dmg * strength) - defence * 1.5 - is_armored * defence * 3 - is_heavy_armored * defence * 4
+	dmg = weapon_dmg * strength + not_armored * 0.3 *(weapon_dmg * strength)  * 1.5 - is_armored * defense * 3 - is_heavy_armored * defense * 4
 
 	avg chance to hit = 55
 
@@ -340,6 +342,7 @@ class Stab(Ability):
 	description = "Stab in the gut!"
 	energy_required = 2
 	requirements = None
+	requires_target = "enemy"
 
 	@staticmethod
 	def can_use(user, target=None):
@@ -356,12 +359,12 @@ class Stab(Ability):
 	def get_damage(user, target, weapon):
 		weapon_dmg = diceroll(weapon.stats["damage"])
 		strength = user.characteristics["strength"]
-		defence = target.defence * 1.5
+		defense = target.defense * 1.5
 		is_armored = int("armor" in target.tags) * 0.5
 		is_heavy_armored = int("heavy armor" in target.tags) * 0.8
 		not_armored = int(not "armor" in target.tags and not "heavy armor" in target.tags)
 
-		dmg = clamp( weapon_dmg * strength + not_armored * 0.05 *(weapon_dmg * strength) - defence, user.characteristics["strength"]/2, 99999999 )
+		dmg = clamp( weapon_dmg * strength + not_armored * 0.05 *(weapon_dmg * strength) , user.characteristics["strength"]/2, 99999999 )
 		return dmg
 
 	@staticmethod
@@ -386,7 +389,7 @@ class Stab(Ability):
 
 	@staticmethod
 	def get_modifiers_applied(use_info):
-		if random.randint(0, 100) < Stab.get_pain_chance(use_info):
+		if random.randint(1, 100) <= Stab.get_pain_chance(use_info):
 			modifier = get_modifier_by_name("pain", use_info.inhibitor, use_info.target)
 			return [modifier]
 		return []
@@ -425,6 +428,7 @@ class QuickStab(Ability):
 	description = "Quick stab in the gut!"
 	energy_required = 1
 	requirements = None
+	requires_target = "enemy"
 
 	@staticmethod
 	def can_use(user, target=None):
@@ -441,12 +445,12 @@ class QuickStab(Ability):
 	def get_damage(user, target, weapon):
 		weapon_dmg = diceroll(weapon.stats["damage"])
 		strength = user.characteristics["strength"]
-		defence = target.defence * 1.5
+		defense = target.defense * 1.5
 		is_armored = int("armor" in target.tags) * 0.6
 		is_heavy_armored = int("heavy armor" in target.tags) * 0.9
 		not_armored = int(not "armor" in target.tags and not "heavy armor" in target.tags)
 
-		dmg = clamp( weapon_dmg * (strength/2) - defence *1.4, user.characteristics["strength"]/2, 99999999 )
+		dmg = clamp( weapon_dmg * (strength/2)  *1.4, user.characteristics["strength"]/2, 99999999 )
 		return dmg
 
 	@staticmethod
@@ -470,7 +474,7 @@ class QuickStab(Ability):
 		return chance
 	@staticmethod
 	def get_modifiers_applied(use_info):
-		if random.randint(0, 100) < QuickStab.get_pain_chance(use_info):
+		if random.randint(1, 100) <= QuickStab.get_pain_chance(use_info):
 			modifier = get_modifier_by_name("pain",use_info.inhibitor, use_info.target)
 			return [modifier]
 		return []
@@ -482,8 +486,7 @@ class QuickStab(Ability):
 		attack_info.use_info["item_used"] = weapon
 		return Ability.use(attack_info)
 
-class Cut(Ability): #TODO test and adapt
-
+class Cut(Ability): 
 	"""
 	Cutting attack for swords, daggers, anything bladed.
 	Effective against unarmored oponents, mediocore against armored oponents. 
@@ -492,7 +495,7 @@ class Cut(Ability): #TODO test and adapt
 
 	chance to hit = accuracy * dexterity  - target_evasion - is_small * target_evasion * 2 - is_quick * target_evasion * 2 + is_big * target_evasion * 2 + is_slow * target_evasion * 2
 
-	dmg = weapon_dmg * strength - defence * 1.5 - is_armored * defence * 2 - is_heavy_armored * defence * 3
+	dmg = weapon_dmg * strength * 1.5 - is_armored * defense * 2 - is_heavy_armored * defense * 3
 
 	avg chance to hit = 55
 
@@ -505,6 +508,7 @@ class Cut(Ability): #TODO test and adapt
 	description = "Cut em up!"
 	energy_required = 2
 	requirements = None
+	requires_target = "enemy"
 
 	@staticmethod
 	def can_use(user, target=None):
@@ -521,12 +525,12 @@ class Cut(Ability): #TODO test and adapt
 	def get_damage(user, target, weapon):
 		weapon_dmg = diceroll(weapon.stats["damage"])
 		strength = user.characteristics["strength"]
-		defence = target.defence
+		defense = target.defense
 		is_armored = int("armor" in target.tags) * 0.4
 		is_heavy_armored = int("heavy armor" in target.tags) * 0.7
 		not_armored = int(not "armor" in target.tags and not "heavy armor" in target.tags)
 
-		dmg = clamp( weapon_dmg * strength + not_armored * 0.05 *(weapon_dmg * strength) - defence *1.15, user.characteristics["strength"]/2, 99999999 )
+		dmg = clamp( weapon_dmg * strength + not_armored * 0.05 *(weapon_dmg * strength)  *1.15, user.characteristics["strength"]/2, 99999999 )
 		return dmg
 
 	@staticmethod
@@ -550,7 +554,7 @@ class Cut(Ability): #TODO test and adapt
 
 	@staticmethod
 	def get_modifiers_applied(use_info):
-		if random.randint(0, 100) < Cut.get_bleeding_chance(use_info):
+		if random.randint(1, 100) <= Cut.get_bleeding_chance(use_info):
 			modifier = get_modifier_by_name("bleeding",use_info.inhibitor, use_info.target)
 			return [modifier]
 		return []
@@ -561,8 +565,7 @@ class Cut(Ability): #TODO test and adapt
 		attack_info.use_info["item_used"] = weapon
 		return Ability.use(attack_info)
 
-class QuickCut(Ability): #TODO test and adapt
-
+class QuickCut(Ability): 
 	"""
 	Exactly like cut, except takes less energy and suffers more penalties for armored opoentns.
 	Cutting attack for small bladed weapons, like daggers.
@@ -572,7 +575,7 @@ class QuickCut(Ability): #TODO test and adapt
 
 	chance to hit = accuracy * dexterity  - target_evasion - is_small * target_evasion * 2 - is_quick * target_evasion * 2 + is_big * target_evasion * 2 + is_slow * target_evasion * 2
 
-	dmg = weapon_dmg * strength - defence - is_armored * defence * 3 - is_heavy_armored * defence * 4
+	dmg = weapon_dmg * strength - is_armored * defense * 3 - is_heavy_armored * defense * 4
 
 	avg chance to hit = 55
 
@@ -587,6 +590,7 @@ class QuickCut(Ability): #TODO test and adapt
 	description = "Cut em up!"
 	energy_required = 1
 	requirements = None
+	requires_target = "enemy"
 
 	@staticmethod
 	def can_use(user, target=None):
@@ -603,12 +607,12 @@ class QuickCut(Ability): #TODO test and adapt
 	def get_damage(user, target, weapon):
 		weapon_dmg = diceroll(weapon.stats["damage"])
 		strength = user.characteristics["strength"]
-		defence = target.defence
+		defense = target.defense
 		is_armored = int("armor" in target.tags) * 0.6
 		is_heavy_armored = int("heavy armor" in target.tags) * 0.9
 		not_armored = int(not "armor" in target.tags and not "heavy armor" in target.tags)
 
-		dmg = clamp( weapon_dmg * (strength/2)  - defence*1.4, user.characteristics["strength"]/2, 99999999 )
+		dmg = clamp( weapon_dmg * (strength/2), user.characteristics["strength"]/2, 99999999 )
 		return dmg
 
 	@staticmethod
@@ -632,7 +636,7 @@ class QuickCut(Ability): #TODO test and adapt
 
 	@staticmethod
 	def get_modifiers_applied(use_info):
-		if random.randint(0, 100) < QuickCut.get_bleeding_chance(use_info):
+		if random.randint(1, 100) <= QuickCut.get_bleeding_chance(use_info):
 			modifier = get_modifier_by_name("bleeding", use_info.inhibitor, use_info.target)
 			return [modifier]
 		return []
@@ -643,12 +647,11 @@ class QuickCut(Ability): #TODO test and adapt
 		attack_info.use_info["item_used"] = weapon
 		return Ability.use(attack_info)
 
-class ShieldUp(Ability): #TODO test and adapt
-
+class ShieldUp(Ability): 
 	"""
-	Raise the shield to protect yourself, gain a defence bonus and a pennalty to evasion for one turn.
+	Raise the shield to protect yourself, gain a defense bonus and a pennalty to evasion for one turn.
 
-	defence_gained = ?
+	defense_gained = ?
 	evasion_lost = ?
 
 	"""
@@ -656,6 +659,7 @@ class ShieldUp(Ability): #TODO test and adapt
 	description = "Hide behind your steel."
 	energy_required = 3
 	requirements = None
+	requires_target = None
 
 	@staticmethod
 	def can_use(user, target=None):
@@ -663,14 +667,14 @@ class ShieldUp(Ability): #TODO test and adapt
 
 	@staticmethod
 	def get_buff_modifiers(use_info):
-		defence_bonus = use_info.use_info["item_used"].stats["defence"]
-		modifier_params = {"stats_change": {"defence":defence_bonus}}
+		defense_bonus = use_info.use_info["item_used"].stats["defense"]
+		modifier_params = {"stats_change": {"defense":defense_bonus}}
 		modifier = get_modifier_by_name("shielded", use_info.use_info["item_used"], use_info.target, modifier_params)
 		return [modifier]
 
 	@staticmethod
 	def get_buff_description(use_info):
-		return "%s put his shieldup and gained a defence bonus.\n"%(use_info.inhibitor.name.capitalize())
+		return ""
 
 	@staticmethod
 	def use(user, target, weapon, combat_event):
@@ -680,8 +684,48 @@ class ShieldUp(Ability): #TODO test and adapt
 		return Ability.use(buff_info)
 
 
-class Sweep(Ability): #TODO test and adapt
+class Revive(Ability): 
+	"""
+	Revive a creature
 
+	"""
+	name = "revive"
+	description = "Revive a creature."
+	energy_required = 5
+	requirements = None
+	requires_target = "friendly"
+
+	@staticmethod
+	def can_use(user, target=None):
+		return Ability.can_use(user, Revive)
+
+	@staticmethod
+	def get_buff_modifiers(use_info):
+		#defense_bonus = use_info.use_info["item_used"].stats["defense"]
+		#modifier_params = {"stats_change": {"defense":defense_bonus}}
+		#modifier = get_modifier_by_name("shielded", use_info.use_info["item_used"], use_info.target, modifier_params)
+		return []
+		#return [modifier]
+
+	@staticmethod
+	def get_buff_description(use_info):
+		return ""
+
+	@staticmethod
+	def use(user, target, weapon, combat_event):
+		buff_info = BuffInfo(user, Revive, target, combat_event)
+		buff_info.use_info["item_used"] = None
+
+		if buff_info.target.dead:
+			buff_info.target.dead = False
+			buff_info.target.health = buff_info.target.stats["max_health"] 
+			buff_info.target.refresh_derived()
+
+		buff_info.description += "%s revives %s.\n"%(user.short_desc.capitalize(),target.short_desc.capitalize())
+		return Ability.use(buff_info)
+
+
+class Sweep(Ability): 
 	"""
 	Sweeping attack for bladed weapons.
 	Hits multiple targets, first target gets the msot damage, each next target suffers less damage than previous. 
@@ -694,6 +738,8 @@ class Sweep(Ability): #TODO test and adapt
 	description = "Swippity sweep."
 	energy_required = 4
 	requirements = None
+	requires_target = "enemy"
+
 
 	@staticmethod
 	def can_use(user, target=None):
@@ -710,12 +756,12 @@ class Sweep(Ability): #TODO test and adapt
 	def get_damage(user, target, weapon):
 		weapon_dmg = diceroll(weapon.stats["damage"])
 		strength = user.characteristics["strength"]
-		defence = target.defence
+		defense = target.defense
 		is_armored = int("armor" in target.tags) * 0.4
 		is_heavy_armored = int("heavy armor" in target.tags) * 0.7
 		not_armored = int(not "armor" in target.tags and not "heavy armor" in target.tags)
 
-		dmg = clamp( weapon_dmg * strength - defence, user.characteristics["strength"]/2, 99999999 )
+		dmg = clamp( weapon_dmg * strength, user.characteristics["strength"]/2, 99999999 )
 		return dmg
 
 	@staticmethod
@@ -739,7 +785,7 @@ class Sweep(Ability): #TODO test and adapt
 
 	@staticmethod
 	def get_modifiers_applied(use_info):
-		if random.randint(0, 100) < Sweep.get_bleeding_chance(use_info):
+		if random.randint(1, 100) <= Sweep.get_bleeding_chance(use_info):
 			modifier = get_modifier_by_name("bleeding", use_info.inhibitor, use_info.target)
 			return [modifier]
 		return []
@@ -756,12 +802,13 @@ class RodentBite(Ability):
 	description = "Rodents bite!"
 	energy_required = 1
 	requirements = None
+	requires_target = "enemy"
 
 
 	"""
 	chance to hit = accuracy * dexterity - target_evasion - is_small * target_evasion - is_quick * target_evasion
 
-	dmg = base_damage * strength - defence - is_armored * defence * 3 - is_heavy_armored * defence * 5
+	dmg = base_damage * strength  - is_armored * defense * 3 - is_heavy_armored * defense * 5
 
 	avg chance to hit = 55
 
@@ -775,11 +822,11 @@ class RodentBite(Ability):
 	def get_damage(user, target, weapon):
 		weapon_damage = diceroll(weapon.stats["damage"])
 		strength = user.characteristics["strength"]
-		defence = target.defence
+		defense = target.defense
 		is_armored = int("armor" in target.tags) * 0.5
 		is_heavy_armored = int("heavy armor" in target.tags) * 0.8
 
-		dmg = clamp( weapon_damage* strength - defence, user.characteristics["strength"], 99999999 )
+		dmg = clamp( weapon_damage* strength , user.characteristics["strength"], 99999999 )
 		return dmg
 
 	@staticmethod
@@ -813,7 +860,7 @@ class RodentBite(Ability):
 
 	@staticmethod
 	def get_modifiers_applied(use_info):
-		if random.randint(0, 100) < RodentBite.get_pain_chance(use_info):
+		if random.randint(1, 100) <= RodentBite.get_pain_chance(use_info):
 			modifier = get_modifier_by_name("pain", use_info.inhibitor, use_info.target)
 			return [modifier]
 		return []
@@ -821,11 +868,11 @@ class RodentBite(Ability):
 
 	@staticmethod
 	def get_miss_description(attack_info):
-		return "%s tries to bite %s but misses.\n"%(attack_info.inhibitor.name.capitalize(), attack_info.target.short_desc.capitalize())
+		return "%s tries to bite %s but misses.\n"%(attack_info.inhibitor.short_desc.capitalize(), attack_info.target.short_desc.capitalize())
 
 	@staticmethod
 	def get_hit_description(attack_info):
-		return "%s bites %s and deals %d damage.\n"%(attack_info.inhibitor.name.capitalize(), attack_info.target.short_desc.capitalize(), attack_info.use_info["damage_dealt"])
+		return "%s bites %s and deals %d damage.\n"%(attack_info.inhibitor.short_desc.capitalize(), attack_info.target.short_desc.capitalize(), attack_info.use_info["damage_dealt"])
 
 	@staticmethod
 	def use(user, target, weapon, combat_event):
@@ -839,6 +886,7 @@ class AnimalBite(Ability):
 	description = "Animals bite, bad!"
 	energy_required = 3
 	requirements = None
+	requires_target = "enemy"
 	"""
 	chance to hit = ?
 	avg chance to hit = ?
@@ -849,11 +897,11 @@ class AnimalBite(Ability):
 	def get_damage(user, target, weapon):
 		weapon_damage = diceroll(weapon.stats["damage"])
 		strength = user.characteristics["strength"]
-		defence = target.defence
+		defense = target.defense
 		is_armored = int("armor" in target.tags) * 0.2
 		is_heavy_armored = int("heavy armor" in target.tags) * 0.4
 
-		dmg = clamp( weapon_damage*strength - defence, user.characteristics["strength"]/2, 99999999 )
+		dmg = clamp( weapon_damage*strength , user.characteristics["strength"]/2, 99999999 )
 		return dmg
 
 	@staticmethod
@@ -881,11 +929,11 @@ class AnimalBite(Ability):
 
 	@staticmethod
 	def get_miss_description(attack_info):
-		return "%s tries to bite %s but misses.\n"%(attack_info.inhibitor.name.capitalize(), attack_info.target.short_desc.capitalize())
+		return "%s tries to bite %s but misses.\n"%(attack_info.inhibitor.short_desc.capitalize(), attack_info.target.short_desc.capitalize())
 
 	@staticmethod
 	def get_hit_description(attack_info):
-		return "%s bites %s and deals %d damage.\n"%(attack_info.inhibitor.name.capitalize(), attack_info.target.short_desc.capitalize(), attack_info.use_info["damage_dealt"])
+		return "%s bites %s and deals %d damage.\n"%(attack_info.inhibitor.short_desc.capitalize(), attack_info.target.short_desc.capitalize(), attack_info.use_info["damage_dealt"])
 
 	@staticmethod
 	def get_pain_chance(use_info):
@@ -894,7 +942,7 @@ class AnimalBite(Ability):
 
 	@staticmethod
 	def get_modifiers_applied(use_info):
-		if random.randint(0, 100) < AnimalBite.get_pain_chance(use_info):
+		if random.randint(1, 100) <= AnimalBite.get_pain_chance(use_info):
 			modifier = get_modifier_by_name("pain", use_info.inhibitor, use_info.target)
 			return [modifier]
 		return []
@@ -911,9 +959,10 @@ class AnimalClaw(Ability):
 	description = "Animals claw, bad!"
 	energy_required = 2
 	requirements = None
+	requires_target = "enemy"
 	"""
 	chance to hit = accuracy * dexterity - target_evasion - is_small * target_evasion - is_quick * target_evasion
-	dmg = base_damage * strength - defence - is_armored * defence * 4 - is_heavy_armored * defence * 5
+	dmg = base_damage * strength  - is_armored * defense * 4 - is_heavy_armored * defense * 5
 	avg chance to hit = 55
 	avg damage = 5
 	chance to cause "bleeding" = ?
@@ -922,11 +971,11 @@ class AnimalClaw(Ability):
 	def get_damage(user, target, weapon):
 		weapon_damage = diceroll(weapon.stats["damage"])
 		strength = user.characteristics["strength"]
-		defence = target.defence
+		defense = target.defense
 		is_armored = int("armor" in target.tags) * 0.2
 		is_heavy_armored = int("heavy armor" in target.tags) * 0.5
 
-		dmg = clamp( weapon_damage* strength - defence, user.characteristics["strength"]/2, 99999999 )
+		dmg = clamp( weapon_damage* strength , user.characteristics["strength"]/2, 99999999 )
 		return dmg
 
 	@staticmethod
@@ -954,11 +1003,11 @@ class AnimalClaw(Ability):
 
 	@staticmethod
 	def get_miss_description(attack_info):
-		return "%s tries to claw %s but misses.\n"%(attack_info.inhibitor.name.capitalize(), attack_info.target.short_desc.capitalize())
+		return "%s tries to claw %s but misses.\n"%(attack_info.inhibitor.short_desc.capitalize(), attack_info.target.short_desc.capitalize())
 
 	@staticmethod
 	def get_hit_description(attack_info):
-		return "%s claws %s and deals %d damage.\n"%(attack_info.inhibitor.name.capitalize(), attack_info.target.short_desc.capitalize(), attack_info.use_info["damage_dealt"])
+		return "%s claws %s and deals %d damage.\n"%(attack_info.inhibitor.short_desc.capitalize(), attack_info.target.short_desc.capitalize(), attack_info.use_info["damage_dealt"])
 
 	@staticmethod
 	def get_bleeding_chance(use_info):
@@ -967,7 +1016,7 @@ class AnimalClaw(Ability):
 
 	@staticmethod
 	def get_modifiers_applied(use_info):
-		if random.randint(0, 100) < AnimalClaw.get_bleeding_chance(use_info):
+		if random.randint(1, 100) <= AnimalClaw.get_bleeding_chance(use_info):
 			modifier = get_modifier_by_name("bleeding", use_info.inhibitor, use_info.target)
 			return [modifier]
 		return []
@@ -986,8 +1035,14 @@ abilities = {
 	"quick cut": QuickCut,
 	"quick stab": QuickStab,
 	"sweep": Sweep,
+
+	#strict non player abilities below
+	"revive": Revive,
+
 	# animal abilities below
 	"rodent bite": RodentBite,
 	"animal bite": AnimalBite,
 	"animal claw": AnimalClaw,
+
+
 }

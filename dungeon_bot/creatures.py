@@ -2,22 +2,23 @@
 import json
 from .items import *
 from .util import *
-from .modifiers import *
 from .abilities import *
 from .level_perks import *
 from . import settings
 import random
+
+from telegram import Emoji
 default_characteristics = {
 	"strength": 5, #how hard you hit
 	"vitality": 5, #how much hp you have
-	"dexterity": 5, #how much energy you have, your position in turn qeue
+	"dexterity": 5, #how much energy you have, your position in turn queue
 	"intelligence": 5, #how likely you are to cause critical effects when attacking
 }
 
 default_equipment = {
 	"armor": None,
-	"primary_weapon": None,
-	"secondary_weapon": None,
+	"primary weapon": None,
+	"secondary weapon": None,
 	"ring": None,
 	"talisman": None,
 	"headwear": None
@@ -36,7 +37,7 @@ class Creature(object):
 
 		self.modifiers = modifiers.copy()
 		self.base_characteristics = characteristics.copy()
-		
+
 		self.base_tags = tags.copy()
 		self.base_abilities = abilities
 
@@ -46,7 +47,9 @@ class Creature(object):
 		self.refresh_derived()
 		self.dead = False
 
-		
+
+
+
 
 	def get_stats_from_characteristics(self, characteristics): #stats are completely derived from characteristics
 		stats =  {
@@ -57,7 +60,7 @@ class Creature(object):
 			"energy_regen": 0
 		}
 
-		stats["max_health"] = characteristics["vitality"]*10 + (characteristics["vitality"] * (self.level * 4))
+		stats["max_health"] =  get_health_for_level(characteristics["vitality"], self.level)
 		stats["max_energy"] = characteristics["strength"] + int(self.level / 10)
 		stats["energy_regen"] = clamp(int(characteristics["strength"] / 3) + int(self.level / 10), 2, 10)
 		stats["health"] = stats["max_health"]
@@ -68,8 +71,8 @@ class Creature(object):
 	def short_desc(self):
 		msg = ""
 		if hasattr(self, "event"):
-			if self.event and hasattr(self.event, "turn_qeue"):
-				ind = self.event.turn_qeue.index(self)
+			if self.event and hasattr(self.event, "turn_queue"):
+				ind = self.event.turn_queue.index(self)
 				msg += str(ind+1) + "."
 		msg += self.name
 		if not self.dead:
@@ -77,7 +80,7 @@ class Creature(object):
 		else:
 			msg += "(dead)"
 		return msg
-	
+
 	@property
 	def health(self):
 		return self.stats["health"]
@@ -104,11 +107,11 @@ class Creature(object):
 
 	@property
 	def primary_weapon(self):
-		return self.equipment["primary_weapon"]
+		return self.equipment["primary weapon"]
 
 	@primary_weapon.setter
 	def primary_weapon(self, value):
-		self.equipment["primary_weapon"] = value
+		self.equipment["primary weapon"] = value
 
 	@property
 	def armor(self):
@@ -120,11 +123,11 @@ class Creature(object):
 
 	@property
 	def secondary_weapon(self):
-		return self.equipment["secondary_weapon"]
+		return self.equipment["secondary weapon"]
 
 	@secondary_weapon.setter
 	def secondary_weapon(self, value):
-		self.equipment["secondary_weapon"] = value
+		self.equipment["secondary weapon"] = value
 
 	@property
 	def ring(self):
@@ -154,44 +157,41 @@ class Creature(object):
 		base_accuracy = diceroll( str(int(2*self.characteristics["intelligence"])) + "d" + str(2*self.characteristics["dexterity"] ))
 		accuracy = base_accuracy
 		for key in list(self.equipment.keys()):
-			if key != "primary_weapon" and key != "secondary_weapon" and self.equipment[key] and "accuracy" in list(self.equipment[key].stats.keys()):
+			if key != "primary weapon" and key != "secondary weapon" and self.equipment[key] and "accuracy" in list(self.equipment[key].stats.keys()):
 				accuracy += diceroll(self.equipment[key].stats["accuracy"])
 
 		if weapon and "accuracy" in weapon.stats.keys():
 			accuracy += diceroll(weapon.stats["accuracy"])
 
 		for modifier in self.modifiers:
-			if "accuracy" in modifier.stats_change.keys():
-				accuracy += diceroll(modifier.stats_change["accuracy"])
+			if "accuracy" in modifier.stats["stats_change"].keys():
+				accuracy += diceroll(modifier.stats["stats_change"]["accuracy"])
 
 		if hasattr(self, "level_perks"):
 			for level_perk in self.level_perks:
 				if "accuracy" in level_perk.stats_change.keys():
 					accuracy += diceroll(level_perk.stats_change["accuracy"])
 
-		#todo accuracy from level perks
 		return clamp(accuracy, 0, 9999)
 
 	@property
-	def defence(self):
+	def defense(self):
 		base_def = diceroll("1d1")
-		defence = base_def
+		defense = base_def
 		for key in list(self.equipment.keys()):
-			if self.equipment[key] and "defence" in list(self.equipment[key].stats.keys()):
-				defence += diceroll(self.equipment[key].stats["defence"])
+			if self.equipment[key] and "defense" in list(self.equipment[key].stats.keys()):
+				defense += diceroll(self.equipment[key].stats["defense"])
 
 		if hasattr(self, "level_perks"):
 			for level_perk in self.level_perks:
-				if "defence" in level_perk.stats_change.keys():
-					defence += diceroll(level_perk.stats_change["defence"])
+				if "defense" in level_perk.stats_change.keys():
+					defense += diceroll(level_perk.stats_change["defense"])
 
 		for modifier in self.modifiers:
-			if "defence" in modifier.stats_change:
-				defence += diceroll(modifier.stats_change["defence"])
+			if "defense" in modifier.stats["stats_change"]:
+				defense += diceroll(modifier.stats["stats_change"]["defense"])
 
-		#todo defence from level perks
-
-		return clamp(defence, 0, 9999)
+		return clamp(defense, 0, 9999)
 
 	@property
 	def evasion(self):
@@ -203,15 +203,13 @@ class Creature(object):
 
 		if hasattr(self, "level_perks"):
 			for level_perk in self.level_perks:
-				if "defence" in level_perk.stats_change.keys():
-					defence += diceroll(level_perk.stats_change["defence"])
+				if "defense" in level_perk.stats_change.keys():
+					defense += diceroll(level_perk.stats_change["defense"])
 
 
 		for modifier in self.modifiers:
-			if "evasion" in modifier.stats_change:
-				evasion += diceroll(modifier.stats_change["evasion"])
-
-		#todo evasion from level perks
+			if "evasion" in modifier.stats["stats_change"]:
+				evasion += diceroll(modifier.stats["stats_change"]["evasion"])
 		return clamp(evasion, 0, 9999)
 
 
@@ -223,23 +221,30 @@ class Creature(object):
 	def level(self, value):
 		self._level = value
 
-	def damage(self, value, inhibitor):
+	def damage(self, value, inhibitor, bypass=False):
 		msg = ""
+		if not bypass:
+
+			defense = self.defense
+
+			dmg = int(value * clamp( (value - defense)/value, 0.1, 1 ))
+			if (value - dmg) > 0:
+				msg += "%d damage negated by defense.\n"%(value - dmg)
+		else:
+			dmg = value
 
 		if isinstance(self, Enemy) and isinstance(inhibitor, Player):
-			exp_gained = self.exp_value * clamp(value/self.stats["max_health"], 0, 1)
-			msg, exp_gained = inhibitor.on_experience_gain(exp_gained) 
+			exp_gained = self.exp_value * clamp(dmg/self.stats["max_health"], 0, 1)
+			mes, exp_gained = inhibitor.on_experience_gain(exp_gained)
+			msg += mes
 			msg += inhibitor.add_experience(exp_gained)
 
-		
-
 		if not self.dead:
-		
-			self.health = self.health - value
-			msg += self.on_health_lost(value)
+			self.health = self.health - dmg
+			msg += self.on_health_lost(dmg)
 
 		killed = self.kill_if_nececary(inhibitor)
-		return msg 
+		return msg
 
 	def add_to_inventory(self, item):
 		if len(self.inventory) < settings.inventory_size:
@@ -265,7 +270,7 @@ class Creature(object):
 		if self.equipment[target_item.item_type] == target_item:
 			return "Already equipped %s."%(target_item.name)
 
-		if target_item.item_type == "secondary_weapon" and self.primary_weapon and "two handed" in self.primary_weapon.requirements and self.primary_weapon.requirements["two handed"]:
+		if target_item.item_type == "secondary weapon" and self.primary_weapon and "two handed" in self.primary_weapon.requirements and self.primary_weapon.requirements["two handed"]:
 			return "Can't equip %s because two handed %s is equipped."%(target_item.short_desc, self.primary_weapon.short_desc)
 
 		if self.equipment[target_item.item_type]:
@@ -340,7 +345,7 @@ class Creature(object):
 				effect = perk.on_combat_start()
 				if effect:
 					msg += effect
-		
+
 		for modifier in self.modifiers:
 			effect = modifier.on_combat_start()
 			if effect:
@@ -366,10 +371,7 @@ class Creature(object):
 			if effect:
 				msg += effect
 
-		self.refresh_stats()
-		self.refresh_characteristics()
-		self.refresh_abilities()
-		self.refresh_tags()
+		self.refresh_derived()
 
 		self.energy = self.stats["max_energy"]
 		return msg
@@ -503,7 +505,7 @@ class Creature(object):
 				effect = perk.on_consumable_used(item)
 				if effect:
 					msg = effect
-				
+
 		return msg
 
 
@@ -598,13 +600,12 @@ class Creature(object):
 					attack_info = at_info
 		return attack_info
 
-	def on_got_hit(self, attack_info): #attack in process of landing at self
+	def on_got_hit(self, attack_info, bypass = False): #attack in process of landing at self
 		msg = ""
-		if attack_info.use_info["damage_dealt"] > 0:
-			attack_info.description += self.damage(attack_info.use_info["damage_dealt"], attack_info.inhibitor)
+
 
 		for modifier in self.modifiers:
-			at_info = modifier.on_hit(attack_info)
+			at_info = modifier.on_got_hit(attack_info)
 			if at_info:
 				attack_info = at_info
 
@@ -614,9 +615,13 @@ class Creature(object):
 				if at_info:
 					attack_info = at_info
 
+		if attack_info.use_info["damage_dealt"] > 0:
+			attack_info.description += self.damage(attack_info.use_info["damage_dealt"], attack_info.inhibitor)
+
 		if self.dead:
 			attack_info.use_info["did_kill"] = True
-			attack_info.description += "%s is killed by %s.\n"%(attack_info.target.short_desc.capitalize(), attack_info.inhibitor.name.capitalize())
+
+			attack_info.description += "**\t%s is killed by %s\t**\n"%(attack_info.target.short_desc.capitalize(), attack_info.inhibitor.short_desc.capitalize())
 			attack_info = attack_info.inhibitor.on_kill(attack_info)
 			attack_info = attack_info.target.on_death(attack_info)
 
@@ -633,9 +638,6 @@ class Creature(object):
 				at_info = perk.on_hit(attack_info)
 				if at_info:
 					attack_info = at_info
-
-
-
 		return attack_info
 
 	def on_attack(self, attack_info): #immediately before attack is launched at target
@@ -665,7 +667,7 @@ class Creature(object):
 				at_info = perk.on_kill(attack_info)
 				if at_info:
 					attack_info = at_info
-		
+
 		return attack_info
 
 	def on_death(self, attack_info):
@@ -728,6 +730,21 @@ class Creature(object):
 
 		return ability_info
 
+	def on_loot(self, item):
+		msg = ""
+		for modifier in self.modifiers:
+			effect = modifier.on_loot(item)
+			if effect:
+				msg += effect
+
+		if hasattr(self, "level_perks"):
+			for perk in self.level_perks:
+				effect = perk.on_buff(item)
+				if effect:
+					msg += effect
+
+		return msg
+
 
 	""" /EVENTS """
 	def kill_if_nececary(self, killer):
@@ -763,8 +780,8 @@ class Creature(object):
 
 	def sort_inventory(self):
 		inv = {
-			"primary_weapon" :[],
-			"secondary_weapon" :[],
+			"primary weapon" :[],
+			"secondary weapon" :[],
 			"armor" :[],
 			"headwear" :[],
 			"talisman" :[],
@@ -777,7 +794,7 @@ class Creature(object):
 		for key in list(inv.keys()):
 			inv[key] = sorted(inv[key], key=lambda item: item.name)
 
-		self.inventory = inv["primary_weapon"] + inv["secondary_weapon"] + inv["armor"] + inv["headwear"] + inv["talisman"] + inv["ring"] + inv["consumable"]
+		self.inventory = inv["primary weapon"] + inv["secondary weapon"] + inv["armor"] + inv["headwear"] + inv["talisman"] + inv["ring"] + inv["consumable"]
 
 	def examine_inventory(self):
 		#desc = "%s's inventory:\n"%(self.name)
@@ -798,7 +815,7 @@ class Creature(object):
 					self.tags.append(tag)
 
 		for modifier in self.modifiers:
-			for tag in modifier.tags_granted:
+			for tag in modifier.stats["tags_granted"]:
 				self.tags.append(tag)
 
 		for key in list(self.equipment.keys()):
@@ -811,13 +828,16 @@ class Creature(object):
 		if hasattr(self, "level_perks"):
 			for perk in self.level_perks:
 				for modifier in perk.__class__.modifiers_granted:
-					modifier_object = get_modifier_by_name( modifier["name"], perk, self, modifier["params"] )
+
+					modifier_object = get_modifier_by_name( modifier["name"], perk, self, modifier["stats"] )
 					modifier_object.apply()
 
 		for key in self.equipment.keys():
 			if self.equipment[key]:
 				for modifier in self.equipment[key].modifiers_granted:
-					modifier_object = get_modifier_by_name( modifier["name"], self.equipment[key], self, modifier["params"] )
+					if "params" in modifier.keys():
+						modifier["stats"] = modifier["params"]
+					modifier_object = get_modifier_by_name( modifier["name"], self.equipment[key], self, modifier["stats"] )
 					modifier_object.apply()
 
 	def refresh_abilities(self):
@@ -829,7 +849,7 @@ class Creature(object):
 					self.abilities.append(prototype(ability, perk))
 
 		for modifier in self.modifiers:
-			for ability in modifier.abilities_granted:
+			for ability in modifier.stats["abilities_granted"]:
 				prototype = abilities[ability]
 				self.abilities.append(prototype(ability, modifier))
 
@@ -848,33 +868,33 @@ class Creature(object):
 					self.characteristics[characteristic] = clamp( self.characteristics[characteristic] + perk.__class__.characteristics_change[characteristic], 1, 20)
 
 		for modifier in self.modifiers:
-			for characteristic in list(modifier.characteristics_change.keys()):
-					self.characteristics[characteristic] = clamp ( self.characteristics[characteristic] +modifier.characteristics_change[characteristic], 1, 20)
-		
+			for characteristic in list(modifier.stats["characteristics_change"].keys()):
+					self.characteristics[characteristic] = clamp ( self.characteristics[characteristic] +modifier.stats["characteristics_change"][characteristic], 1, 20)
+
 		for item in list(self.equipment.keys()):
 			if self.equipment[item] and "characteristics_change" in list(self.equipment[item].stats.keys()):
 				for characteristic in list(self.equipment[item].stats["characteristics_change"].keys()):
 					self.characteristics[characteristic] = clamp ( self.characteristics[characteristic] + self.equipment[item].stats["characteristics_change"][characteristic], 1, 20)
 
-		
+
 	def refresh_stats(self):
 		self.stats = self.get_stats_from_characteristics(self.characteristics)
 		#refresh stats
 		if hasattr(self, "level_perks"):
 			for perk in self.level_perks:
 				for stat in list(perk.__class__.stats_change.keys()):
-					if stat != "defence" and stat != "evasion" and stat != "accuracy":
+					if stat != "defense" and stat != "evasion" and stat != "accuracy":
 						self.stats[stat] = clamp( self.stats[stat]+ perk.__class__.stats_change[stat], 0, 9999)
 
 		for modifier in self.modifiers:
-			for stat in list(modifier.stats_change.keys()):
-				if stat != "defence" and stat != "evasion" and stat != "accuracy":
-					self.stats[stat] = clamp( self.stats[stat] + modifier.stats_change[stat], 0, 9999)
-		
+			for stat in list(modifier.stats["stats_change"].keys()):
+				if stat != "defense" and stat != "evasion" and stat != "accuracy":
+					self.stats[stat] = clamp( self.stats[stat] + modifier.stats["stats_change"][stat], 0, 9999)
+
 		for item in list(self.equipment.keys()):
 			if self.equipment[item] and "stats_change" in list(self.equipment[item].stats.keys()):
 				for stat in list(self.equipment[item].stats["stats_change"].keys()):
-					if stat != "defence" and stat != "evasion" and stat != "accuracy":
+					if stat != "defense" and stat != "evasion" and stat != "accuracy":
 						self.stats[stat] = clamp( self.stats[stat] +self.equipment[item].stats["stats_change"][stat], 0, 9999)
 
 	def refresh_derived(self):
@@ -892,25 +912,34 @@ class Creature(object):
 		characteristics.append("|\t"+"Dexterity"+":" +str(self.characteristics["dexterity"]) +" ("+str(self.base_characteristics["dexterity"])+")" +"\n")
 		characteristics.append("|\t"+"Vitality"+":" +str(self.characteristics["vitality"]) +" ("+str(self.base_characteristics["vitality"])+")" +"\n")
 		characteristics.append("|\t"+"Intelligence"+":" +str(self.characteristics["intelligence"]) +" ("+str(self.base_characteristics["intelligence"])+")" +"\n")
-		
-		avg_defence = sum([self.defence for x in range(501)])/500
+
+		avg_defense = sum([self.defense for x in range(501)])/500
 		avg_evasion = sum([self.evasion for x in range(501)])/500
 		avg_accuracy = sum([self.get_accuracy() for x in range(501)])/500
 
+		abilities = []
+		for ability in self.abilities:
+			name = ability.name
+			granted_by = ""
+			if ability.granted_by:
+				granted_by = "(%s)"%(ability.granted_by.name)
+
+			abilities.append("%s%s"%(name, granted_by))
 		desc = "\n".join(
 		[
 			"%s. lvl %d"%(self.name.capitalize(), self.level),
 			"%s"%(self.description or "----"),
 			"Characteristics:\n%s"%("".join(characteristics)),
 			"Health:\n|\t%d/%d"%(self.health, self.stats["max_health"]),
-			"Energy:\n|\t%d/%d, regen per turn: %d"%(self.energy, self.stats["max_energy"],self.stats["energy_regen"]) + "\nExp:\n|\t%d/%d"%(self.experience, self.max_experience) if hasattr(self, "experience") else "",
-			"Average defence, evasion:\n|\t%d, %d"%(avg_defence, avg_evasion),
-			"Average accuracy:\n|\t%d"%(avg_accuracy),
+			"Energy:\n|\t%d/%d, regen per turn: %d"%(self.energy, self.stats["max_energy"],self.stats["energy_regen"]),
+			"Exp:\n|\t%d/%d"%(self.experience, self.max_experience) if hasattr(self, "experience") else "",
+			"Average defense, evasion, accuracy:\n|\t%d, %d, %d"%(avg_defense, avg_evasion, avg_accuracy),
 			"Tags:\n|\t%s"%(", ".join(self.tags)),
-			"Modifiers:\n|\t%s"%(", ".join(["%s(%s)"%(modifier.name, modifier.granted_by.name) for modifier in self.modifiers])),
-			"Abilities:\n|\t%s"%(", ".join(["%s(%s)"%(abiility.name, abiility.granted_by.name) for abiility in self.abilities])),
+			"Modifiers:\n%s"%("\n".join(["|\t%s(%s)"%(modifier.name, modifier.granted_by.name) for modifier in self.modifiers])),
+			"Abilities:\n|\t%s"%(", ".join(abilities)),
 			"Equipment:\n%s"%(self.examine_equipment()),
 		])
+
 		return desc
 
 	def to_json(self):
@@ -963,7 +992,7 @@ class Player(Creature):
 	@property
 	def max_experience(self):
 	    return max_exp_for_level(self.level)
-	
+
 	@property
 	def level(self):
 		return self._level
@@ -1001,8 +1030,8 @@ class Player(Creature):
 
 	def level_up(self):
 		self.level = self.level + 1
-		self.level_up_points += ( int(self.level % 5) == 0 ) * 1 
-		self.perk_points += ( int(self.level % 3) == 0 ) * 1 
+		self.level_up_points += ( int(self.level % 5) == 0 ) * 1
+		self.perk_points += ( int(self.level % 3) == 0 ) * 1
 		msg = self.on_level_up()
 		return msg
 
@@ -1045,19 +1074,20 @@ class Player(Creature):
 			drop_table = target.__class__.drop_table
 			for item in list(drop_table.keys()):
 				prob = int(int(drop_table[item]) * settings.loot_probability_multiplier)
-				got_item = random.randint(0, 100) <= prob 
+				got_item = random.randint(0, 100) <= prob
 				if got_item:
 					item = get_item_by_name(item, target.__class__.loot_coolity)
 					attack_info.use_info["loot_dropped"].append(item)
 					if isinstance(attack_info.inhibitor, Player):
 						loot_goes_to = random.choice(attack_info.inhibitor.event.players)
 						if loot_goes_to.add_to_inventory(item):
-							attack_info.description += "%s got loot: %s.\n"%(loot_goes_to.name.capitalize(), item.name)
+							attack_info.description += "%s got loot: %s.\n"%(loot_goes_to.name.capitalize(), item.full_name)
+							attack_info.description += loot_goes_to.on_loot(item)
 						else:
 							attack_info.description += "%s got loot: %s, but didn't have enough space in inventory.\n"%(loot_goes_to.name.capitalize(), item.name)
 					attack_info.use_info["loot_dropped"].append(item)
 		return super(Player, self).on_kill(attack_info)
-			
+
 	def to_json(self):
 		big_dict = super(Player, self).to_json()
 		big_dict["userid"] = self.userid
@@ -1082,7 +1112,7 @@ class Enemy(Creature):
 		self.event = None
 
 	def select_target(self, combat_event):
-		alive_players = [x for x in combat_event.turn_qeue if isinstance(x, Player)]
+		alive_players = [x for x in combat_event.turn_queue if isinstance(x, Player)]
 		if len(alive_players) > 0:
 			self.target = random.choice(alive_players)
 		else:
@@ -1099,7 +1129,7 @@ class Enemy(Creature):
 		if "stats" in list(data.keys()):
 			data["stats"] = json.loads(data["stats"])
 			stats = data["stats"]
-					
+
 		for i in range(len(data["inventory"])):
 			data["inventory"][i] = Item.de_json(data["inventory"][i])
 
@@ -1112,4 +1142,3 @@ class Enemy(Creature):
 
 		en =  Enemy(data.get("name"), data.get("level"), data.get("characteristics"), stats, data.get("description"), inventory, equipment, data.get('tags'), [], [])
 		return en
-
