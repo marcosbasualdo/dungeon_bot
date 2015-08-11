@@ -1151,7 +1151,8 @@ class CombatEvent(BotEvent):
 								line.append(ability_name + " %d.%s"%(i+1, c.name))
 			line.append("examine %d.%s"%(i+1, c.name))
 			creatures_keys.append({'line': line, 'creature': c})
-		creatures_keys = sorted(creatures_keys, key=lambda x: 1 if(x['creature'].dead) else 0)
+
+		creatures_keys = sorted(creatures_keys, key=lambda x: -1 if (isinstance(x['creature'], Player)) else (1 if(x['creature'].dead) else 0))
 		for i in range(len(creatures_keys)):
 			keyboard.append(creatures_keys[i]['line'])
 		return keyboard
