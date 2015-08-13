@@ -167,6 +167,7 @@ class ChatEvent(BotEvent):
 
 				if len(self.log) > 1000:
 					self.log = []
+
 				broadcast = []
 				broadcast.append([user, "You: "+msg.capitalize()])
 				for u in self.users:
@@ -203,9 +204,13 @@ class ChatEvent(BotEvent):
 		if len(command.split(" "))>1:
 			if isinstance(args, tuple):
 				args = list(args)
-			args = command.split(" ")[1:] + args
-			command = command.split(" ")[0]
+
+			cmd_words = command.split(" ")
+			command = " ".join(cmd_words[:len(cmd_words)-1])
+			args.insert(0, cmd_words[len(cmd_words)-1])
+			#command = command.split(" ")[0]
 			return self.handle_command(user, command, *args)
+				
 		return 'Unknown command, try "help".'
 
 	def add_user(self, user):
@@ -397,7 +402,7 @@ class LevelUpEvent(BotEvent):
 								return msg + str(self.finish())
 							else:
 								if len(self.available_perks) <= 0:
-									msg += "No perks available."
+									msg += "No perks available.\n"
 									msg += "Done leveling up.\n"
 									return msg + str(self.finish())
 								else:
@@ -747,9 +752,13 @@ class DungeonLobbyEvent(BotEvent):
 		if len(command.split(" "))>1:
 			if isinstance(args, tuple):
 				args = list(args)
-			args = command.split(" ")[1:] + args
-			command = command.split(" ")[0]
+
+			cmd_words = command.split(" ")
+			command = " ".join(cmd_words[:len(cmd_words)-1])
+			args.insert(0, cmd_words[len(cmd_words)-1])
+			#command = command.split(" ")[0]
 			return self.handle_command(user, command, *args)
+				
 
 		return 'Unknown command, try "help".'
 
@@ -1060,9 +1069,13 @@ class DungeonCrawlEvent(BotEvent):
 		if len(command.split(" "))>1:
 			if isinstance(args, tuple):
 				args = list(args)
-			args = command.split(" ")[1:] + args
-			command = command.split(" ")[0]
+
+			cmd_words = command.split(" ")
+			command = " ".join(cmd_words[:len(cmd_words)-1])
+			args.insert(0, cmd_words[len(cmd_words)-1])
+			#command = command.split(" ")[0]
 			return self.handle_command(user, command, *args)
+				
 		return 'Unknown command, try "help".'
 
 	def finish(self):
@@ -1095,21 +1108,7 @@ class CombatEvent(BotEvent):
 		}
 
 
-		for user in self.users:
-			for ply in self.players:
-				if ply.userid == str(user.id):
-					self.users_to_players[str(user.id)] = ply
-
-			if not user.id in list(self.user_abilities.keys()):
-				self.user_abilities[str(user.id)] = {}
-
-			ply = self.users_to_players[str(user.id)]
-			for ability in ply.abilities:
-				if ability.name in [ab for ab in self.user_abilities[str(user.id)] ]:# ability with that name already exists
-					self.user_abilities[str(user.id)][ability.granted_by.name + " " +ability.name] = ability
-				else:
-					self.user_abilities[str(user.id)][ability.name] = ability
-
+		
 		for enemy in enemies:
 			enemy.event = self
 
@@ -1124,6 +1123,23 @@ class CombatEvent(BotEvent):
 		#if isinstance(self.turn_queue[self.turn], Enemy):
 		#	self.greeting_message += self.ai_turn()
 
+	def fill_combat_abilities(self):
+		for user in self.users:
+			for ply in self.players:
+				if ply.userid == str(user.id):
+					self.users_to_players[str(user.id)] = ply
+
+			if not user.id in list(self.user_abilities.keys()):
+				self.user_abilities[str(user.id)] = {}
+
+			ply = self.users_to_players[str(user.id)]
+			for ability in ply.abilities:
+				if ability.name in [ab for ab in self.user_abilities[str(user.id)] ]:# ability with that name already exists
+					self.user_abilities[str(user.id)][(ability.granted_by.short_name if hasattr(ability.granted_by, "short_name") else ability.granted_by.name) + " " +ability.name] = ability
+				else:
+					self.user_abilities[str(user.id)][ability.name] = ability
+
+
 	def get_keyboard(self, user):
 		keyboard = [
 			["turn", "help", "status", "close keyboard"],
@@ -1135,9 +1151,11 @@ class CombatEvent(BotEvent):
 					non_target_abs.append(ability_name)
 		keyboard.append(non_target_abs)
 		creatures_keys = []
+		examine_line = []
 		for i in range(len(self.turn_queue)):
 			c = self.turn_queue[i]
 			line = []
+			examine_line.append("examine %d.%s"%(i+1, c.name))
 			if not c.dead:
 				if isinstance(c, Enemy):
 					if str(user.id) in self.user_abilities.keys():
@@ -1151,10 +1169,10 @@ class CombatEvent(BotEvent):
 								line.append(ability_name + " %d.%s"%(i+1, c.name))
 			line.append("examine %d.%s"%(i+1, c.name))
 			creatures_keys.append({'line': line, 'creature': c})
-
 		creatures_keys = sorted(creatures_keys, key=lambda x: -1 if (isinstance(x['creature'], Player)) else (1 if(x['creature'].dead) else 0))
 		for i in range(len(creatures_keys)):
 			keyboard.append(creatures_keys[i]['line'])
+		keyboard.append(examine_line)
 		return keyboard
 
 	def status(self, user=None):
@@ -1171,12 +1189,14 @@ class CombatEvent(BotEvent):
 		msg += "Round %d.\n"%(self.round)
 		if self.turn_queue == []:
 			self.turn_queue = self.update_turn_queue()
+			
 
 		msg += self.get_printable_turn_queue()
 
 		if self.round == 1 and self.turn == 0:
 			for creature in self.turn_queue:
 				msg += creature.on_combat_start()
+			self.fill_combat_abilities()
 
 		combat_logger.info("%s"%(msg))
 		msg += self.this_turn()
@@ -1307,8 +1327,11 @@ class CombatEvent(BotEvent):
 			if len(command.split(" "))>1:
 				if isinstance(args, tuple):
 					args = list(args)
-				args = command.split(" ")[1:] + args
-				command = command.split(" ")[0]
+
+				cmd_words = command.split(" ")
+				command = " ".join(cmd_words[:len(cmd_words)-1])
+				args.insert(0, cmd_words[len(cmd_words)-1])
+				#command = command.split(" ")[0]
 				return self.handle_combat_command(user, command, *args)
 
 			return "No such ability!"
@@ -1394,19 +1417,18 @@ class CombatEvent(BotEvent):
 		else:
 			if command in list(self.user_abilities[str(user.id)].keys()): #is it a combat ability?
 				return self.handle_combat_command(user, command, *args)
+
+
 			if len(command.split(" "))>1:
 				if isinstance(args, tuple):
 					args = list(args)
-				args = command.split(" ")[1:] + args
-				command = command.split(" ")[0]
+
+				cmd_words = command.split(" ")
+				command = " ".join(cmd_words[:len(cmd_words)-1])
+				args.insert(0, cmd_words[len(cmd_words)-1])
+				#command = command.split(" ")[0]
 				return self.handle_command(user, command, *args)
 
-
-			if len(command.split(" ")) == 1 and len(args) == 1:
-
-				args = list(args)
-				command = command.split(" ")[0] +" "+ args[0]
-				return self.handle_command(user, command, *args)
 
 			return 'Unknown command, try "help".'
 

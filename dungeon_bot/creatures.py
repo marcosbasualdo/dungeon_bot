@@ -39,10 +39,16 @@ class Creature(object):
 		self.base_characteristics = characteristics.copy()
 
 		self.base_tags = tags.copy()
-		self.base_abilities = abilities
+		self.base_abilities = abilities.copy()
 
 		self.inventory = inventory.copy()
 		self.equipment = equipment.copy()
+
+		#self.stats = {}
+	#	self.characteristics = {}
+		self.tags = []
+		self.abilities = []
+		self.modifiers = []
 
 		self.refresh_derived()
 		self.dead = False
@@ -61,8 +67,8 @@ class Creature(object):
 		}
 
 		stats["max_health"] =  get_health_for_level(characteristics["vitality"], self.level)
-		stats["max_energy"] = characteristics["strength"] + int(self.level / 10)
-		stats["energy_regen"] = clamp(int(characteristics["strength"] / 3) + int(self.level / 10), 2, 10)
+		stats["max_energy"] = characteristics["strength"] + int(self.level / 20)
+		stats["energy_regen"] = clamp(int(characteristics["strength"] / 3) + int(self.level / 20), 2, 6)
 		stats["health"] = stats["max_health"]
 		stats["energy"] = stats["max_energy"]
 		return stats
@@ -234,10 +240,10 @@ class Creature(object):
 			dmg = value
 
 		if isinstance(self, Enemy) and isinstance(inhibitor, Player):
-			exp_gained = self.exp_value * clamp(dmg/self.stats["max_health"], 0, 1)
+			exp_gained = self.exp_value * clamp(dmg/clamp(self.stats["max_health"],1, 10000000), 0, 1)
 			mes, exp_gained = inhibitor.on_experience_gain(exp_gained)
 			msg += mes
-			msg += inhibitor.add_experience(exp_gained)
+			msg += inhibitor.add_experience(exp_gained*settings.exp_multiplier)
 
 		if not self.dead:
 			self.health = self.health - dmg
@@ -253,19 +259,20 @@ class Creature(object):
 		else:
 			return False
 
-	def equip(self, target_item):
+	def equip(self, target_item, force_equip = False):
 		if target_item.item_type == "consumable":
 			return "Can't equip %s."%(target_item.name)
 
-		if target_item.requirements:
-			for key in list(target_item.requirements.keys()):
-				if key == "characteristics":
-					for characteristic in target_item.requirements[key]:
-						if self.characteristics[characteristic] < target_item.requirements[key][characteristic]:
-							return "%d %s required to use this item."%(target_item.requirements[key][characteristic], key)
-				if key == "two handed" and target_item.requirements[key]:
-					if self.secondary_weapon:
-						return "Can't equip two handed %s because %s is equipped."%(target_item.short_desc, self.secondary_weapon.short_desc)
+		if not force_equip: #forceequip allows to bypass requirements checks
+			if target_item.requirements:
+				for key in list(target_item.requirements.keys()):
+					if key == "characteristics":
+						for characteristic in target_item.requirements[key]:
+							if self.characteristics[characteristic] < target_item.requirements[key][characteristic]:
+								return "%d %s required to use this item."%(target_item.requirements[key][characteristic], key)
+					if key == "two handed" and target_item.requirements[key]:
+						if self.secondary_weapon:
+							return "Can't equip two handed %s because %s is equipped."%(target_item.short_desc, self.secondary_weapon.short_desc)
 
 		if self.equipment[target_item.item_type] == target_item:
 			return "Already equipped %s."%(target_item.name)
@@ -284,7 +291,7 @@ class Creature(object):
 		self.refresh_derived()
 		self.sort_inventory()
 		msg = self.on_item_equipped(target_item)
-		return msg + "Succesfully equipped %s."%(target_item.name)
+		return msg + "Successfully equipped %s."%(target_item.name)
 
 	def unequip(self, target_item):
 		if target_item.item_type == "consumable":
@@ -295,7 +302,7 @@ class Creature(object):
 				self.sort_inventory()
 				self.refresh_derived()
 				msg = self.on_item_unequipped(target_item)
-				return msg + "Succesfully unequipped %s."%(target_item.name)
+				return msg + "Successfully unequipped %s."%(target_item.name)
 			else:
 				return "Not enough space in inventory."
 		return "Not equipped!"
@@ -305,17 +312,18 @@ class Creature(object):
 			if self.equipment[key]:
 				self.unequip(self.equipment[key])
 
-	def destroy(self, target_item):
+	def destroy(self, target_item, sort = True):
 		if target_item in self.inventory:
-			self.unequip(target_item)
+			#self.unequip(target_item)
 			self.inventory.remove(target_item)
-			self.sort_inventory()
-			return "Succesfully destroyed %s."%(target_item.name)
+			if sort:
+				self.sort_inventory()
+			return "Successfully destroyed %s."%(target_item.name)
 		return "No such item."
 
 	def clear_inventory(self):
 		for item in self.inventory:
-			self.destroy(item)
+			self.destroy(item, False)
 
 	def use(self, item):
 		#if item in self.inventory:
@@ -335,6 +343,13 @@ class Creature(object):
 
 		self.modifiers.append(modifier)
 		self.modifiers = sorted(self.modifiers, key=lambda x: x.priority, reverse=False)
+		#print('refreshing on modifier added')
+		
+		self.refresh_characteristics()
+		self.refresh_stats()
+		self.refresh_abilities()
+		self.refresh_tags()
+
 		return True
 
 	""" EVENTS """
@@ -351,8 +366,10 @@ class Creature(object):
 			if effect:
 				msg += effect
 
-		self.refresh_stats()
+		#print("refreshing on combat start")
+		
 		self.refresh_characteristics()
+		self.refresh_stats()
 		self.refresh_abilities()
 		self.refresh_tags()
 		return msg
@@ -423,7 +440,10 @@ class Creature(object):
 				if effect:
 					msg += effect
 
+		#print("refreshing on modifier applied")
+
 		self.refresh_characteristics()
+		self.refresh_stats()
 		self.refresh_abilities()
 		self.refresh_tags()
 
@@ -441,8 +461,9 @@ class Creature(object):
 				effect = perk.on_modifier_lifted(modifier)
 				if effect:
 					msg += effect
-
+		#print("refreshing on modifier lifted")
 		self.refresh_characteristics()
+		self.refresh_stats()
 		self.refresh_abilities()
 		self.refresh_tags()
 
@@ -730,16 +751,16 @@ class Creature(object):
 
 		return ability_info
 
-	def on_loot(self, item):
+	def on_loot(self, item, source):
 		msg = ""
 		for modifier in self.modifiers:
-			effect = modifier.on_loot(item)
+			effect = modifier.on_loot(item, source)
 			if effect:
 				msg += effect
 
 		if hasattr(self, "level_perks"):
 			for perk in self.level_perks:
-				effect = perk.on_buff(item)
+				effect = perk.on_loot(item, source)
 				if effect:
 					msg += effect
 
@@ -845,20 +866,19 @@ class Creature(object):
 		if hasattr(self, "level_perks"):
 			for perk in self.level_perks:
 				for ability in perk.__class__.abilities_granted:
-					prototype = abilities[ability]
+					prototype = abilities_listing[ability]
 					self.abilities.append(prototype(ability, perk))
 
 		for modifier in self.modifiers:
 			for ability in modifier.stats["abilities_granted"]:
-				prototype = abilities[ability]
+				prototype = abilities_listing[ability]
 				self.abilities.append(prototype(ability, modifier))
 
 		for key in self.equipment.keys():
 			if self.equipment[key]:
 				for ability in self.equipment[key].abilities_granted:
-					prototype = abilities[ability]
+					prototype = abilities_listing[ability]
 					self.abilities.append(prototype(ability, self.equipment[key]))
-
 	def refresh_characteristics(self):
 		self.characteristics = self.base_characteristics.copy()
 		#refresh characteristics
@@ -877,8 +897,17 @@ class Creature(object):
 					self.characteristics[characteristic] = clamp ( self.characteristics[characteristic] + self.equipment[item].stats["characteristics_change"][characteristic], 1, 20)
 
 
-	def refresh_stats(self):
-		self.stats = self.get_stats_from_characteristics(self.characteristics)
+	def refresh_stats(self, full_reset = False):
+		temp_stats = self.get_stats_from_characteristics(self.characteristics)
+		if hasattr(self, "stats"):
+			self.stats["max_health"] = temp_stats["max_health"]
+			self.stats["max_energy"] = temp_stats["max_energy"]
+			self.stats["energy_regen"] = temp_stats["energy_regen"]
+			if full_reset:
+				self.stats["health"] = temp_stats["health"]
+				self.stats["energy"] = temp_stats["energy"]
+		else:
+			self.stats = temp_stats
 		#refresh stats
 		if hasattr(self, "level_perks"):
 			for perk in self.level_perks:
@@ -898,11 +927,12 @@ class Creature(object):
 						self.stats[stat] = clamp( self.stats[stat] +self.equipment[item].stats["stats_change"][stat], 0, 9999)
 
 	def refresh_derived(self):
+		#print("refreshing derived")
 		self.refresh_modifiers()
 		self.refresh_abilities()
 		self.refresh_tags()
 		self.refresh_characteristics()
-		self.refresh_stats()
+		self.refresh_stats(True)
 
 	def examine_self(self):
 		if not self:
@@ -925,6 +955,16 @@ class Creature(object):
 				granted_by = "(%s)"%(ability.granted_by.name)
 
 			abilities.append("%s%s"%(name, granted_by))
+
+		modifiers = []
+		for modifier in self.modifiers:
+			granted_by = ""
+			name = modifier.name
+			if modifier.granted_by:
+				granted_by = "(%s)"%(modifier.granted_by.name)
+			modifiers.append("|\t%s%s"%(name, granted_by))
+
+
 		desc = "\n".join(
 		[
 			"%s. lvl %d"%(self.name.capitalize(), self.level),
@@ -935,7 +975,7 @@ class Creature(object):
 			"Exp:\n|\t%d/%d"%(self.experience, self.max_experience) if hasattr(self, "experience") else "",
 			"Average defense, evasion, accuracy:\n|\t%d, %d, %d"%(avg_defense, avg_evasion, avg_accuracy),
 			"Tags:\n|\t%s"%(", ".join(self.tags)),
-			"Modifiers:\n%s"%("\n".join(["|\t%s(%s)"%(modifier.name, modifier.granted_by.name) for modifier in self.modifiers])),
+			"Modifiers:\n%s"%("\n".join(modifiers)),
 			"Abilities:\n|\t%s"%(", ".join(abilities)),
 			"Equipment:\n%s"%(self.examine_equipment()),
 		])
@@ -967,7 +1007,7 @@ class Creature(object):
 		return big_dict
 
 class Player(Creature):
-	def __init__(self, userid, name, level=1, characteristics = default_characteristics, stats=None, description=None, inventory=[], equipment=default_equipment, tags=["animate", "humanoid", "human"],abilities=[],modifiers=[], level_perks=[], experience=0, level_up_points=0, perk_points=0, last_read_notification_id = -1):
+	def __init__(self, userid, name, level=1, characteristics = default_characteristics, stats=None, description=None, inventory=[], equipment=default_equipment, tags=["animate", "living", "humanoid", "human"],abilities=[],modifiers=[], level_perks=[], experience=0, level_up_points=0, perk_points=0, last_read_notification_id = -1):
 		self.level_perks = level_perks.copy()
 		self._experience = experience
 		self.level_up_points = level_up_points
@@ -1016,7 +1056,7 @@ class Player(Creature):
 		if perk_requirements["level"] > self.level:
 			return False
 		for p in perk_requirements["has_perks"]:
-			if not p.__class__.name in own_perk_names:
+			if not p in own_perk_names:
 				return False
 		for characteristic in list(perk_requirements["characteristics"].keys()):
 			if self.characteristics[characteristic] < perk_requirements["characteristics"][characteristic]:
@@ -1031,7 +1071,7 @@ class Player(Creature):
 	def level_up(self):
 		self.level = self.level + 1
 		self.level_up_points += ( int(self.level % 5) == 0 ) * 1
-		self.perk_points += ( int(self.level % 3) == 0 ) * 1
+		self.perk_points += ( int(self.level % 5) == 0 ) * 1
 		msg = self.on_level_up()
 		return msg
 
@@ -1068,24 +1108,21 @@ class Player(Creature):
 		ply.refresh_derived()
 		return ply
 
+
+
 	def on_kill(self, attack_info):
 		target = attack_info.target
 		if isinstance(target, Enemy):
-			drop_table = target.__class__.drop_table
-			for item in list(drop_table.keys()):
-				prob = int(int(drop_table[item]) * settings.loot_probability_multiplier)
-				got_item = random.randint(0, 100) <= prob
-				if got_item:
-					item = get_item_by_name(item, target.__class__.loot_coolity)
-					attack_info.use_info["loot_dropped"].append(item)
-					if isinstance(attack_info.inhibitor, Player):
-						loot_goes_to = random.choice(attack_info.inhibitor.event.players)
-						if loot_goes_to.add_to_inventory(item):
-							attack_info.description += "%s got loot: %s.\n"%(loot_goes_to.name.capitalize(), item.full_name)
-							attack_info.description += loot_goes_to.on_loot(item)
-						else:
-							attack_info.description += "%s got loot: %s, but didn't have enough space in inventory.\n"%(loot_goes_to.name.capitalize(), item.name)
-					attack_info.use_info["loot_dropped"].append(item)
+			dropped_items = target.drop_loot()
+			for item in dropped_items:
+				if isinstance(attack_info.inhibitor, Player):
+					loot_goes_to = random.choice(attack_info.inhibitor.event.players)
+					if loot_goes_to.add_to_inventory(item):
+						attack_info.description += "!!\t%s got loot: %s.\n"%(loot_goes_to.name.capitalize(), item.full_name)
+						attack_info.description += loot_goes_to.on_loot(item, attack_info.target)
+					else:
+						attack_info.description += "!!\t%s got loot: %s, but didn't have enough space in inventory.\n"%(loot_goes_to.name.capitalize(), item.name)
+				attack_info.use_info["loot_dropped"].append(item)
 		return super(Player, self).on_kill(attack_info)
 
 	def to_json(self):
@@ -1120,6 +1157,17 @@ class Enemy(Creature):
 
 	def act(self):
 		return [] #base enemy has no ai
+
+	def drop_loot(self):
+		items = []
+		drop_table = self.__class__.drop_table
+		for item in list(drop_table.keys()):
+			prob = int(int(drop_table[item]) * settings.loot_probability_multiplier)
+			got_item = random.randint(1, 100) <= prob
+			if got_item:
+				item = get_item_by_name(item, self.__class__.loot_coolity)
+				items.append(item)
+		return items
 
 	@staticmethod
 	def de_json(data):

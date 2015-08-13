@@ -29,7 +29,7 @@ def test_attack_abilities(player, enemy = None):
 	available_abiltiies = player.abilities
 	for testing_ability in available_abiltiies:
 		for x in range(1000):
-			dummy_pos = next((x for x in range(len(combat_event.turn_qeue)) if combat_event.turn_qeue[x] == dummy), None)
+			dummy_pos = next((x for x in range(len(combat_event.turn_queue)) if combat_event.turn_queue[x] == dummy), None)
 			#ability_pos = next((x for x in range(len(player.abilities)) if player.abilities[x].name == testing_ability ), None)
 			command = testing_ability.name
 			args = [str(dummy_pos+1)] 
@@ -42,16 +42,18 @@ def test_attack_abilities(player, enemy = None):
 		all_testing_ability_uses = [use_info for use_info in combat_event.abilities_used if use_info.prototype_class ==testing_ability.__class__ and use_info.inhibitor == player and use_info.ability_type == "attack"]
 		
 		if len(all_testing_ability_uses) > 0:
-			print("Ability %s used %d times."%(testing_ability.name, len(all_testing_ability_uses)))
-			print("Ability did hit  %d times."%(len([u for u in all_testing_ability_uses if u.use_info["did_hit"]])))
-			print("Ability average chance to hit %f."%(sum([u.use_info["hit_chance"] for u in all_testing_ability_uses])/len(all_testing_ability_uses)))
-			print("Ability average damage dealt %f."%(sum([u.use_info["damage_dealt"] for u in all_testing_ability_uses])/len([u for u in all_testing_ability_uses if u.use_info["did_hit"] ]) ) )
-			print("Critical applied %d times."%( len( [u for u in all_testing_ability_uses if len(u.use_info["modifiers_applied"]) >0]) ) )
-			print("Critical effects per energy used: %f."%(len( [u for u in all_testing_ability_uses if len(u.use_info["modifiers_applied"]) >0])/ abs(sum([ u.use_info["energy_change"] for u in all_testing_ability_uses]))))
-			print("Dmg per energy used: %f."%(sum([u.use_info["damage_dealt"] for u in all_testing_ability_uses]) /abs(sum([ u.use_info["energy_change"] for u in all_testing_ability_uses]))))
-			print("")
+			logger.info("Ability %s with item %s."%(testing_ability.name,testing_ability.granted_by.short_desc))
+			logger.info("Used %d times."%(len(all_testing_ability_uses)))
+			logger.info("Ability did hit  %d times."%(len([u for u in all_testing_ability_uses if u.use_info["did_hit"]])))
+			logger.info("Ability average chance to hit %f."%(sum([u.use_info["hit_chance"] for u in all_testing_ability_uses])/len(all_testing_ability_uses)))
+			logger.info("Ability average damage dealt %f."%(sum([u.use_info["damage_dealt"] for u in all_testing_ability_uses])/len([u for u in all_testing_ability_uses if u.use_info["did_hit"] ]) ) )
+			logger.info("Critical applied %d times."%( len( [u for u in all_testing_ability_uses if len(u.use_info["modifiers_applied"]) >0]) ) )
+			logger.info("Critical effects per energy used: %f."%(len( [u for u in all_testing_ability_uses if len(u.use_info["modifiers_applied"]) >0])/ abs(sum([ u.use_info["energy_change"] for u in all_testing_ability_uses]))))
+			logger.info("Dmg per energy used: %f."%(sum([u.use_info["damage_dealt"] for u in all_testing_ability_uses]) /abs(sum([ u.use_info["energy_change"] for u in all_testing_ability_uses]))))
+			logger.info("")
 		else:
-			print("abilities werent used one time.")
+			logger.info("ability %s werent used one time."%(testing_ability.name))
+			logger.info("output %s, ability uses \n-----\n%s\n-----\n."%(output,all_testing_ability_uses))
 	combat_event.finish()
 		
 def controlled_combat_event(players, enemies):
@@ -66,13 +68,13 @@ def controlled_combat_event(players, enemies):
 	combat_event = CombatEvent(finished_callback, players, users, enemies)
 	
 	print("Running controlled combat event.")
-	print(combat_event.greeting_message)
+	logger.info(combat_event.greeting_message)
 	while combat_event != None:
 		inp = input(">")
 		msg = inp.strip().lower().split(' ')
 		
 
-		user = next((x for x in combat_event.users if x.userid == combat_event.turn_qeue[combat_event.turn].userid), None)
+		user = next((x for x in combat_event.users if x.userid == combat_event.turn_queue[combat_event.turn].userid), None)
 		command, args = parse_command(inp)
 		output = combat_event.handle_command(user, command, *args)
 		for player in combat_event.players:
@@ -97,6 +99,7 @@ def test_weapon_abilities():
 	dummy = Dummy(100000)
 	dummy.tags = []
 	ply.characteristics["dexterity"] = 5
+	ply.characteristics["intelligence"] = 5
 	#armor = get_item_by_name("plate armor")
 	#dummy.inventory.append(armor)
 	#dummy.equip(armor)
@@ -109,33 +112,44 @@ def test_weapon_abilities():
 		ply.clear_inventory()
 
 def run_tests():
+	# item = "random"
+	# while(True):
+	# 	print(get_item_by_name(item, 1).examine_self())
+	# 	inp = input("type stop to stop")
+	# 	if inp == "stop":
+	# 		break
+
+	# for enemy_table in list(enemy_tables.keys()):
+	# 	for diff in list(enemy_tables[enemy_table].keys()):
+	# 		enemies = enemy_tables[enemy_table][diff]
+	# 		en, desc = enemies[0](*enemies[1])
+	# 		print(desc)
+
 
 	#test_weapon_abilities()
 	#controlled combat event
-	ply = Player("player1", "testply1", 100)
+	ply = Player("player1", "testply1 the ply", 100)
 	ply1 = Player("player2", "testply2")
 
 	item = "sword"
 	item = get_item_by_name(item, 1)
-
-	print(item.examine_self())
+	logger.info(item.examine_self())
 	#item.stats["accuracy"] = "100d10"
 	#item.stats["damage"] = "7d1"
 	ply.inventory.append(item)
-	ply.equip(item)
-	ply.level_perks.append(Sweeper(ply))
-	ply.base_characteristics["strength"] = 5
+	ply.equip(item, True)
+	ply.level_perks.append(Mage(ply))
+	ply.base_characteristics["intelligence"] = 6
 
 	
 	dummy = Dummy(1000)
 
 	#ply.refresh_derived()
-	item = "chainmail"
-	item = get_item_by_name(item)
-	dummy.tags = []
-	dummy.add_to_inventory(item)
-	dummy.equip(item)
+	# item = "dagger"
+	# item = get_item_by_name(item)
+	# ply.add_to_inventory(item)
+	# ply.equip(item)
 
-	#enemies = [dummy, Peasant()]
-	enemies, desc = lich()
+	#enemies = [dummy,(1),Mercenary(1), ]
+	enemies, desc = peasant_pack("medium")
 	controlled_combat_event([ply], enemies)

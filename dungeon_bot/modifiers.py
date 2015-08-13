@@ -142,7 +142,7 @@ class Modifier(object): #Modifiers always affect only the host that carries them
 	def on_health_lost(self, amount=None):
 		pass
 
-	def on_loot(self, item_gained):
+	def on_loot(self, item_gained, source):
 		pass
 
 	def on_modifier_applied(self, modifier):
@@ -166,10 +166,13 @@ class KnockedDown(Modifier):
 
 	def __init__(self, granted_by, host, stats = {}, name="knockdown", description="Loose 5d6 evasion, 2d6 your defense, and half your dexterity.") :
 		Modifier.__init__(self, granted_by, host,  stats, name, description )
-		self.stats["characteristics_change"] = {"dexterity": -host.characteristics["dexterity"]}
-		self.stats["duration"] = clamp( 10 - host.characteristics["dexterity"], 2, 4)
-		self.stats["stats_change"] = {"evasion": "-5d6", "defense": "-3d6"}
-		
+		self.stats["characteristics_change"] = {"dexterity": -host.base_characteristics["dexterity"]}
+		self.stats["duration"] = clamp( 10 - host.characteristics["dexterity"], 1, 2)
+		self.stats["stats_change"] = {"defense": "-2d6"}
+	
+	def can_apply(self):
+		return "animate" in self.host.tags
+
 	def on_round(self):
 		msg = "%s struggles to get up from the ground.\n"%(self.host.short_desc.capitalize())
 		msg += super(KnockedDown, self).on_round()
@@ -194,6 +197,9 @@ class Vunerable(Modifier): #simply adds defense, hinders evasion
 	tags_granted = []
 	def __init__(self, granted_by, host, stats = {}, name="vunerable", description="Loose 3d6 defense for a turn."):
 		Modifier.__init__(self, granted_by, host,  stats, name, description )
+
+	def can_apply(self):
+		return "animate" in self.host.tags
 
 	def on_applied(self):
 		msg = super(Vunerable, self).on_applied()
@@ -233,6 +239,31 @@ class Pain(Modifier): #simply adds defense, hinders evasion
 		msg = "!!\t" + msg
 		return msg
 
+class Fear(Modifier):
+	priority = 0
+	duration = 2
+	characteristics_change = {"dexterity":-1, "intelligence":-2}
+	stats_change =  {}
+	abilities_granted = []
+	tags_granted = []
+	def __init__(self, granted_by, host, stats = {}, name="fear", description="Loose 2 dexterity and intelligence."):
+		Modifier.__init__(self, granted_by, host,  stats, name, description )
+		self.stats["characteristics_change"] = {"dexterity":-1, "intelligence":-2}
+		self.stats["duration"] = clamp( 10 - host.characteristics["intelligence"], 1, 3)
+
+	def can_apply(self):
+		return "animate" in self.host.tags and "living" in self.host.tags
+
+	def on_applied(self):
+		msg = super(Fear, self).on_applied()
+		msg += "%s's blood runs cold of fear!\n"%(self.host.short_desc.capitalize())
+		msg = "!!\t" + msg
+		return msg
+
+	def on_lifted(self):
+		msg = "%s regains control over his emotions and is no longer in fear.\n"%(self.host.short_desc.capitalize())
+		msg = "!!\t" + msg
+		return msg
 
 class Bleeding(Modifier): #simply adds defense, hinders evasion
 	priority = 0
@@ -315,23 +346,92 @@ class Shielded(Modifier): #simply adds defense, hinders evasion
 	tags_granted = []
 	def __init__(self, granted_by, host, stats = {}, name="shielded", description="grants defense") :
 		Modifier.__init__(self, granted_by, host, stats, name, description)
-		self.stats["stats_change"]["defense"] = self.granted_by.stats["defense"]
-		self.stats["stats_change"]["evasion"] = self.granted_by.stats["evasion"]
+		if not "defense" in self.stats["stats_change"]:
+			self.stats["stats_change"]["defense"] = self.granted_by.stats["defense"]
+		if not "evasion" in self.stats["stats_change"]:
+			self.stats["stats_change"]["evasion"] = self.granted_by.stats["evasion"]
 
 	def on_applied(self):
 		msg = super(Shielded, self).on_applied()
-		msg += "%s raises his shieldup and gains a %s defense and %s evasion penalty for the next round.\n"%(self.host.short_desc, self.stats["stats_change"]["defense"], self.stats["stats_change"]["evasion"])
+		msg += "%s gains a %s defense and %s evasion penalty for the next %d rounds.\n"%(self.host.short_desc, self.stats["stats_change"]["defense"], self.stats["stats_change"]["evasion"], self.stats["duration"])
 		msg = "!!\t" + msg
 		return msg
 
 	def on_lifted(self):
-		msg = "%s is no longer protected by his shield!\n"%(self.host.short_desc.capitalize())
+		msg = "%s is no longer shielded!\n"%(self.host.short_desc.capitalize())
 		msg = "!!\t" + msg
 		return msg
 
 class Bonus(Modifier): #simply adds defense, hinders evasion
 	def __init__(self, granted_by, host, stats = {}, name="bonus", description="???"):
 		Modifier.__init__(self, granted_by, host, stats, name, description)
+
+	@staticmethod
+	def get_randomized_params_for_coolity(coolity):
+		name = ""
+		self_class = Bonus
+
+		possible_chars = ["strength", "dexterity", "vitality", "intelligence"]
+		possible_stats = ["max_health", "max_energy", "defense", "evasion"]
+		pool = possible_chars
+		stats = {}
+
+		chars_or_stats = "characteristics_change"
+		if random.randint(0, 1) == 1:
+			chars_or_stats = "stats_change"
+			pool = possible_stats
+
+		stat_range = [1, 4]
+		stat = random.choice(pool)
+		if stat == "max_health":
+			stat_range = [10, 100]
+		if stat == "max_energy":
+			stat_range = [1, 2]
+		if stat == "defense":
+			stat_range = ["1d3", "2d6"]
+		if stat == "evasion":
+			stat_range = ["1d3", "2d6"]
+
+		stats[chars_or_stats] = { stat: stat_range }
+		stats = Modifier.get_randomized_params_for_coolity(self_class, stats, coolity)
+		name = " ".join(stat.split("_"))
+		return {"name": "bonus", "stats":stats} 
+
+class Nerf(Modifier): #simply adds defense, hinders evasion
+	def __init__(self, granted_by, host, stats = {}, name="nerf", description="???"):
+		Modifier.__init__(self, granted_by, host, stats, name, description)
+
+	@staticmethod
+	def get_randomized_params_for_coolity(coolity):
+		name = ""
+		self_class = Nerf
+
+		possible_chars = ["strength", "dexterity", "vitality", "intelligence"]
+		possible_stats = ["max_health", "max_energy"]
+		pool = possible_chars
+		stats = {}
+
+		chars_or_stats = "characteristics_change"
+		if random.randint(0, 1) == 1:
+			chars_or_stats = "stats_change"
+			pool = possible_stats
+
+		stat_range = [-4, -1]
+
+		stat = random.choice(pool)
+		if stat == "max_health":
+			stat_range = [-100, -10]
+		if stat == "max_energy":
+			stat_range = [-2, 1]
+		if stat == "defense":
+			stat_range = ["-2d6", "-1d3"]
+		if stat == "evasion":
+			stat_range = ["-2d6", "-1d3"]
+
+		stats[chars_or_stats] = { stat: stat_range }
+		stats = Modifier.get_randomized_params_for_coolity(self_class, stats, coolity)
+		name = " ".join(stat.split("_"))
+		return {"name": "nerf", "stats":stats} 
 
 class Regeneration(Modifier): #simply adds defense, hinders evasion
 	priority = 0
@@ -346,6 +446,7 @@ class Regeneration(Modifier): #simply adds defense, hinders evasion
 	def on_round(self):
 		chance = diceroll(self.stats["healing chance"])
 		msg = ""
+		print(chance)
 		if random.randint(0, 100) < chance:
 			heal = diceroll(self.stats["healing amount"])
 			if self.host.health < self.host.stats["max_health"]: 
@@ -661,12 +762,12 @@ class Greed(Modifier):
 		Modifier.__init__(self, granted_by, host,  stats, name, description)
 
 	
-	def on_loot(self, item_gained):
+	def on_loot(self, item_gained, source):
 		msg = ""
 		chance = diceroll(self.stats["greed chance"])
 		if random.randint(0, 100) < chance:
 			self.host.inventory.remove(item_gained)
-			msg = "!!\t%s destroys %s.\n"%(self.granted_by.name.capitalize, item_gained.name)
+			msg = "!!\t%s destroys %s.\n"%(self.granted_by.name.capitalize(), item_gained.name)
 		return msg
 
 	@staticmethod
@@ -782,7 +883,7 @@ class Vampirism(Modifier):
 		if attack_info.inhibitor == self.host and self.host.health < self.host.stats["max_health"]:
 			regen = int(attack_info.use_info["damage_dealt"] * diceroll(self.stats["vampirism amount"])/100)
 			if attack_info.use_info["did_hit"] and not attack_info.target.dead and "living" in attack_info.target.tags:
-				attack_info.description += "!!\t%s regenerates %d healh because of %s.\n"%(self.host.name.capitalize(), regen, self.granted_by.name)
+				attack_info.description += "!!\t%s regenerates %d healh because of %s.\n"%(self.host.name.capitalize(), regen, self.name)
 				self.host.health += regen
 		return attack_info
 
@@ -794,6 +895,7 @@ class Vampirism(Modifier):
 
 		stats = Modifier.get_randomized_params_for_coolity(self_class, stats, coolity)
 		return {"name":"vampirism", "stats":stats} 
+
 
 def get_modifier_by_name(modifier_name, source, target, stats={}):
 	prototype = modifier_listing[modifier_name]
@@ -819,7 +921,7 @@ def get_random_modifiers_for_coolity(coolity):
 	granted_modifiers = []
 
 	got_modifier = get_number_in_range([0, 100], coolity)
-	chance_for_modifier = clamp(coolity*100, 20, 100)
+	chance_for_modifier = clamp(coolity*100, 25, 100)
 
 	if got_modifier < chance_for_modifier:
 		modifiers_type = None
@@ -837,11 +939,11 @@ def get_random_modifiers_for_coolity(coolity):
 
 		amount_of_modifiers = get_number_in_range([1, max_modifiers], 0)
 		if modifiers_type == "good":
-			modifier_pool = good_item_modifiers
+			modifier_pool = good_item_modifiers.copy()
 		elif modifiers_type == "bad":
-			modifier_pool = bad_item_modifiers
+			modifier_pool = bad_item_modifiers.copy()
 		else:
-			modifier_pool = good_item_modifiers + bad_item_modifiers
+			modifier_pool = good_item_modifiers.copy() + bad_item_modifiers.copy()
 		for x in range(amount_of_modifiers):
 			if len(modifier_pool) < 1:
 				break
@@ -856,6 +958,7 @@ def get_random_modifiers_for_coolity(coolity):
 modifier_listing = {
 	"shielded" : Shielded,
 	"bonus" : Bonus,
+	"nerf" : Nerf,
 	
 	
 	"vunerable": Vunerable,
@@ -863,6 +966,7 @@ modifier_listing = {
 	"bleeding": Bleeding,
 	"pain": Pain, 
 	"burning": Burning,
+	"fear": Fear,
 
 	"suffering": Suffering,
 	"judgement": Judgement,
@@ -882,5 +986,5 @@ modifier_listing = {
 
 }
 
-good_item_modifiers = ["fire attack", "electricity attack", "regeneration", "wisdom", "energy", "hurt undead", "hurt demons", "vampirism"]
-bad_item_modifiers = ["judgement", "suffering", "greed", "stupidity", "weakness"]
+good_item_modifiers = ["fire attack", "electricity attack", "regeneration", "wisdom", "energy", "hurt undead", "hurt demons", "vampirism", "bonus"]
+bad_item_modifiers = ["judgement", "suffering", "greed", "stupidity", "weakness", "nerf"]
