@@ -1167,7 +1167,6 @@ class CombatEvent(BotEvent):
 						for ability_name in list(self.user_abilities[str(user.id)].keys()):
 							if self.user_abilities[str(user.id)][ability_name].__class__.requires_target == "friendly":
 								line.append(ability_name + " %d.%s"%(i+1, c.name))
-			line.append("examine %d.%s"%(i+1, c.name))
 			creatures_keys.append({'line': line, 'creature': c})
 		creatures_keys = sorted(creatures_keys, key=lambda x: -1 if (isinstance(x['creature'], Player)) else (1 if(x['creature'].dead) else 0))
 		for i in range(len(creatures_keys)):
